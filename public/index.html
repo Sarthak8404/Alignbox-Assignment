@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fun Friday Group Chat</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">Connecting...</div>
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="header-left">
+                <span class="back-btn">‹</span>
+                <div class="group-avatar">🎉</div>
+                <span class="group-name">Fun Friday Group</span>
+            </div>
+            <button class="anonymous-toggle" id="anonymousToggle">Anonymous</button>
+        </div>
+
+        <div class="messages-container" id="messagesContainer">
+            <div class="date-divider">Today</div>
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator">
+            Someone is typing...
+        </div>
+
+        <div class="message-input-container">
+            <div class="input-wrapper">
+                <textarea 
+                    class="message-input" 
+                    id="messageInput" 
+                    placeholder="Type a message..."
+                    rows="1"></textarea>
+                <button class="camera-btn">📷</button>
+                <button class="attachment-btn">📎</button>
+            </div>
+            <button class="send-btn" id="sendBtn">
+                <span>▶</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        class GroupChat {
+            constructor() {
+                this.isAnonymous = false;
+                this.isConnected = false;
+                this.userId = this.generateUserId();
+                this.userName = this.generateUserName();
+                
+                this.initializeElements();
+                this.attachEventListeners();
+                this.connect();
+                this.loadMessages();
+            }
+
+            generateUserId() {
+                return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+
+            generateUserName() {
+                const names = ['Alex', 'Sam', 'Jordan', 'Casey', 'Morgan', 'Riley', 'Avery', 'Quinn'];
+                return names[Math.floor(Math.random() * names.length)];
+            }
+            initializeElements() {
+                this.anonymousToggle = document.getElementById('anonymousToggle');
+                this.messagesContainer = document.getElementById('messagesContainer');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendBtn = document.getElementById('sendBtn');
+                this.typingIndicator = document.getElementById('typingIndicator');
+                this.connectionStatus = document.getElementById('connectionStatus');
+            }
+            attachEventListeners() {
+                this.anonymousToggle.addEventListener('click', () => this.toggleAnonymous());
+                this.sendBtn.addEventListener('click', () => this.sendMessage());
+                this.messageInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+                this.messageInput.addEventListener('input', () => this.autoResize());
+            }
+
+            toggleAnonymous() {
+                this.isAnonymous = !this.isAnonymous;
+                this.anonymousToggle.classList.toggle('active', this.isAnonymous);
+                this.anonymousToggle.textContent = this.isAnonymous ? 'Anonymous On' : 'Anonymous';
+            }
+
+            autoResize() {
+                this.messageInput.style.height = 'auto';
+                this.messageInput.style.height = this.messageInput.scrollHeight + 'px';
+            }
+
+            async connect() {
+                try {
+                    this.connectionStatus.style.display = 'block';
+                    this.connectionStatus.textContent = 'Connecting...';
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    this.isConnected = true;
+                    this.connectionStatus.classList.add('connected');
+                    this.connectionStatus.textContent = 'Connected';
+                    
+                    setTimeout(() => {
+                        this.connectionStatus.style.display = 'none';
+                    }, 2000);
+                    this.pollMessages();
+                } catch (error) {
+                    console.error('Connection failed:', error);
+                    this.connectionStatus.textContent = 'Connection Failed';
+                }
+            }
+
+            async loadMessages() {
+                try {
+                    const response = await fetch('/api/messages');
+                    const messages = await response.json();
+                    messages.forEach(message => this.displayMessage(message));
+                    this.scrollToBottom();
+                } catch (error) {
+                    console.error('Failed to load messages:', error);
+                }
+            }
+
+            async pollMessages() {
+                if (!this.isConnected) return;
+                try {
+                    const response = await fetch('/api/messages/recent');
+                    const messages = await response.json();
+                    messages.forEach(message => {
+                        if (!document.querySelector(`[data-id="${message.id}"]`)) {
+                            this.displayMessage(message);
+                        }
+                    });
+                    this.scrollToBottom();
+                } catch (error) {
+                    console.error('Failed to poll messages:', error);
+                }
+
+                setTimeout(() => this.pollMessages(), 2000);
+            }
+
+            async sendMessage() {
+                const content = this.messageInput.value.trim();
+                if (!content) return;
+
+                const message = {
+                    content: content,
+                    author: this.isAnonymous ? 'Anonymous' : this.userName,
+                    is_anonymous: this.isAnonymous,
+                    user_id: this.userId
+                };
+
+                try {
+                    const response = await fetch('/api/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(message)
+                    });
+
+                    if (response.ok) {
+                        this.messageInput.value = '';
+                        this.messageInput.style.height = 'auto';
+                        this.loadMessages();
+                    }
+                } catch (error) {
+                    console.error('Failed to send message:', error);
+                }
+            }
+
+            displayMessage(message) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${message.user_id === this.userId ? 'own' : ''} ${message.is_anonymous ? 'anonymous' : ''}`;
+                messageDiv.setAttribute('data-id', message.id);
+
+                const avatar = document.createElement('div');
+                avatar.className = 'message-avatar';
+                avatar.textContent = message.is_anonymous ? '?' : message.author.charAt(0);
+
+                const content = document.createElement('div');
+                content.className = 'message-content';
+
+                const author = document.createElement('div');
+                author.className = 'message-author';
+                author.textContent = message.author;
+
+                const bubble = document.createElement('div');
+                bubble.className = 'message-bubble';
+                bubble.textContent = message.content;
+
+                const time = document.createElement('div');
+                time.className = 'message-time';
+                time.textContent = this.formatTime(new Date(message.created_at));
+
+                content.appendChild(author);
+                content.appendChild(bubble);
+                content.appendChild(time);
+
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(content);
+
+                this.messagesContainer.appendChild(messageDiv);
+            }
+
+            formatTime(date) {
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+
+            scrollToBottom() {
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            new GroupChat();
+        });
+    </script>
+</body>
+</html>

@@ -8,12 +8,11 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// MySQL connection configuration
+// MySQL connection configuration credentials are public for temporary DB
 const dbConfig = {
   host: process.env.DB_HOST || 'mysql-18b25f6a-sarthakmanmode789-7934.k.aivencloud.com',
   user: process.env.DB_USER || 'avnadmin',
@@ -54,13 +53,10 @@ zKYseg==
   }
 };
 
-// Create MySQL connection pool
 const pool = mysql.createPool(dbConfig);
 
-// Initialize database and tables
 async function initializeDatabase() {
     try {
-        // Create messages table (pool automatically connects to DB)
         const createTableQuery = `
             CREATE TABLE IF NOT EXISTS messages (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -81,9 +77,6 @@ async function initializeDatabase() {
 }
 
 
-// API Routes
-
-// Get all messages
 app.get('/api/messages', async (req, res) => {
     try {
         const [rows] = await pool.execute(
@@ -95,8 +88,6 @@ app.get('/api/messages', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch messages' });
     }
 });
-
-// Get recent messages (for polling)
 app.get('/api/messages/recent', async (req, res) => {
     try {
         const since = req.query.since || new Date(Date.now() - 30000).toISOString(); // Last 30 seconds
@@ -110,20 +101,13 @@ app.get('/api/messages/recent', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch recent messages' });
     }
 });
-
-// Create new message
 app.post('/api/messages', async (req, res) => {
     try {
         const { content, author, user_id, is_anonymous } = req.body;
-
-        // Validate required fields
         if (!content || !author || !user_id) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
-
-        // Sanitize content
-        const sanitizedContent = content.trim().substring(0, 1000); // Limit to 1000 characters
-
+        const sanitizedContent = content.trim().substring(0, 1000); 
         if (!sanitizedContent) {
             return res.status(400).json({ error: 'Message content cannot be empty' });
         }
@@ -132,8 +116,6 @@ app.post('/api/messages', async (req, res) => {
             'INSERT INTO messages (content, author, user_id, is_anonymous) VALUES (?, ?, ?, ?)',
             [sanitizedContent, author, user_id, is_anonymous || false]
         );
-
-        // Fetch the created message
         const [newMessage] = await pool.execute(
             'SELECT * FROM messages WHERE id = ?',
             [result.insertId]
@@ -146,13 +128,11 @@ app.post('/api/messages', async (req, res) => {
     }
 });
 
-// Delete message (optional feature)
 app.delete('/api/messages/:id', async (req, res) => {
     try {
         const messageId = req.params.id;
         const { user_id } = req.body;
 
-        // Check if message exists and belongs to user
         const [message] = await pool.execute(
             'SELECT * FROM messages WHERE id = ? AND user_id = ?',
             [messageId, user_id]
@@ -169,8 +149,6 @@ app.delete('/api/messages/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to delete message' });
     }
 });
-
-// Get message count
 app.get('/api/stats', async (req, res) => {
     try {
         const [totalMessages] = await pool.execute('SELECT COUNT(*) as count FROM messages');
@@ -189,36 +167,29 @@ app.get('/api/stats', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch stats' });
     }
 });
-
-// Serve the main HTML file
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Error handling middleware
 app.use((error, req, res, next) => {
     console.error('Unhandled error:', error);
     res.status(500).json({ error: 'Internal server error' });
 });
 
-// 404 handler
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
 });
 
-// Graceful shutdown
 process.on('SIGINT', async () => {
     console.log('Shutting down gracefully...');
     await pool.end();
     process.exit(0);
 });
 
-// Start server
 async function startServer() {
     try {
         await initializeDatabase();

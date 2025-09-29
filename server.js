@@ -17,7 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const dbConfig = {
   host: process.env.DB_HOST || 'mysql-18b25f6a-sarthakmanmode789-7934.k.aivencloud.com',
   user: process.env.DB_USER || 'avnadmin',
-  password: process.env.DB_PASSWORD ,
+  password: process.env.DB_PASSWORD || 'mysql-18b25f6a-sarthakmanmode789-7934.k.aivencloud.com' ,
   database: process.env.DB_NAME || 'defaultdb',
   port: process.env.DB_PORT || 22349,
   waitForConnections: true,
